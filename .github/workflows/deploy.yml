@@ -1,9 +1,8 @@
-name: BIOGENESIS X3 - Deploy Built Website
+name: Deploy BIOGENESIS X3 to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,7 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: github-pages
+  group: pages
   cancel-in-progress: true
 
 jobs:
@@ -22,7 +21,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Read project source
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           lfs: true
@@ -32,38 +31,39 @@ jobs:
         with:
           version: 10.34.3
 
-      - name: Use Node.js 22 on GitHub (not on students' computers)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
+          node-version: '22'
+          cache: 'pnpm'
 
-      - name: Install dependencies
+      - name: Install project dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build React for the correct GitHub Pages path
-        run: pnpm exec vite build --config vite.github.config.ts
+      - name: Build Vite app for GitHub Pages
+        env:
+          FIGMA_PUBLIC_URL: /BIOGENESIS-X3-Web
+        run: pnpm run build
 
-      - name: Confirm index.html is built, not Figma source
+      - name: Verify built output
         shell: bash
         run: |
           test -f dist/index.html
           test -d dist/assets
-          if grep -q 'src/main.tsx' dist/index.html; then
-            echo 'ERROR: dist/index.html still points at TSX source.'
+          if grep -q '/src/main.tsx' dist/index.html; then
+            echo 'ERROR: dist/index.html still points to React/TSX source'
             exit 1
           fi
-          echo 'Built index.html and assets verified.'
-          grep -o '/BIOGENESIS-X3-Web/assets/[^" ]*' dist/index.html || true
+          echo 'Build output verified'
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload built website, not repository source
+      - name: Upload built website
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: ./dist
 
-      - name: Publish to GitHub Pages
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
