@@ -283,6 +283,8 @@ function Home({ go, openLab }: { go: (r: Route) => void; openLab: () => void }) 
               ["📊", "IoT Dashboard", "ดูค่าเซนเซอร์ 3 ชั้น", () => go("dashboard")],
               ["⚙️", "Greenhouse Setup", "ตั้งค่าอุปกรณ์โรงเรือน", () => go("setup")],
               ["🧪", "Experiment Lab", "แนวคิดการเรียนรู้สูตรดิน", openLab],
+              ["🔌", "ทดสอบ ESP32", "เปิดหน้าควบคุม LED", () => window.open(`${import.meta.env.BASE_URL}led-test.html`, "_blank", "noopener,noreferrer")],
+
             ].map(([icon, title, sub, fn]) => (
               <button onClick={fn as () => void} key={title as string}>
                 <span>{icon as string}</span>
