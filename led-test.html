@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BIOGENESIS X3 — ESP32 LED Test</title>
+  <style>
+    :root { font-family: system-ui, 'Noto Sans Thai', Tahoma, sans-serif; color: #123044; background: #eef7f6; }
+    * { box-sizing: border-box; } body { margin:0; min-height:100vh; }
+    header { background: linear-gradient(115deg,#06364b,#087e79); color: white; padding: 26px max(18px, calc((100vw - 900px)/2)); }
+    .eyebrow { letter-spacing:2px; color:#a9f4dc; font-size:12px; font-weight:800; }
+    h1 { margin:6px 0 4px; font-size:clamp(26px,5vw,43px); } h2 { margin:0 0 16px; font-size:25px; }
+    main { max-width:940px; padding:20px; margin:24px auto; }
+    .card { background:white; border-radius:22px; box-shadow:0 13px 40px #002a3430; padding:26px; }
+    .status { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-radius:12px; padding:12px 14px; background:#f1f5f8; margin:16px 0; font-weight:700; }
+    .dot { width:13px; height:13px; border-radius:99px; background:#9da9b2; }
+    .connected .dot { background:#00ae78; }
+    .buttons { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:18px 0; }
+    button { border:0; border-radius:14px; min-height:76px; padding:12px; font-size:21px; font-weight:800; color:white; cursor:pointer; }
+    button:disabled { opacity:.35;cursor:not-allowed; }
+    #on { background:#008d56; } #off { background:#d74848; }
+    .led { width:90px; height:90px; border-radius:50%; background:#c7d2d8; margin:auto; box-shadow: inset 0 -7px 12px #0003; transition:.2s; }
+    .led.on { background:#3cf48f; box-shadow:0 0 48px #39dd7c, inset 0 -7px 12px #119850; }
+    .center { text-align:center; } .hint { color:#536d7b;line-height:1.7 }
+    .alert { color:#7b4d09; background:#ffefc5; border-radius:12px; padding:14px; margin:16px 0; }
+    code { background:#edf3f4; padding:2px 6px; border-radius:5px; overflow-wrap:anywhere; }
+    a { color:#087c8b; }
+    @media (max-width:650px) { .buttons{grid-template-columns:1fr} .card{padding:18px} }
+  </style>
+</head>
+<body>
+<header><div class="eyebrow">GO ROBOT • WEB TO ESP32 • LED ONLY</div><h1>BIOGENESIS X3</h1><div>ทดสอบการส่งคำสั่งจากเว็บไซต์บนคอมพิวเตอร์ไปยัง ESP32 จริง</div></header>
+<main><section class="card">
+  <h2>🎛️ ESP32 — LED Control</h2>
+  <div id="network" class="status"><span class="dot"></span><span id="mqttStatus">กำลังเชื่อมต่อ MQTT Broker…</span></div>
+  <div id="device" class="status"><span class="dot"></span><span id="deviceStatus">ยังไม่มีสถานะตอบกลับจาก ESP32</span></div>
+  <div class="center"><div id="led" class="led"></div><p id="ledText">LED: ไม่ทราบสถานะ</p></div>
+  <div class="buttons"><button id="on" disabled>💡 เปิด LED</button><button id="off" disabled>⏹ ปิด LED</button></div>
+  <p id="message" class="hint" role="status">เมื่อเชื่อม Broker สำเร็จจึงจะกดปุ่มได้ ต้องให้ ESP32 ออนไลน์ด้วย</p>
+  <div class="alert"><strong>ใช้สำหรับทดสอบ LED เท่านั้น</strong> — ตัวอย่างนี้ใช้ MQTT Broker สาธารณะ อย่านำไปต่อกับ Servo มอเตอร์ ฮีตเตอร์ หรืออุปกรณ์ไฟฟ้ากำลัง และห้ามส่งข้อมูลส่วนตัวผ่าน Broker นี้</div>
+  <p class="hint">Broker: <code>broker.emqx.io</code> · วิธีเชื่อมต่อ: <code>WSS</code> · สถานะที่หน้าจอนี้ต้องได้จาก ESP32 ตอบกลับจริง ไม่ใช่ข้อมูลจำลอง</p>
+  <p class="hint">ถ้า Broker เชื่อมได้แต่ยังไม่พบอุปกรณ์: ตรวจ Wi-Fi ESP32, Serial Monitor และให้ค่า <code>MQTT_NAMESPACE</code> ในไฟล์เว็บกับ Arduino ตรงกัน</p>
+</section></main>
+<script src="https://unpkg.com/mqtt@5.15.1/dist/mqtt.min.js"></script>
+<script>
+(()=>{
+  'use strict';
+  const base = 'biogenesisx3/gorobot2026/44434e320971e42de7/led';
+  const commandTopic=base+'/cmd';
+  const statusTopic=base+'/status';
+  const network=document.querySelector('#network');
+  const device=document.querySelector('#device');
+  const mqttStatus=document.querySelector('#mqttStatus');
+  const deviceStatus=document.querySelector('#deviceStatus');
+  const msg=document.querySelector('#message');
+  const led=document.querySelector('#led');
+  const ledText=document.querySelector('#ledText');
+  const on=document.querySelector('#on');
+  const off=document.querySelector('#off');
+  const setConnection = ok => {
+    network.classList.toggle('connected',ok); mqttStatus.textContent=ok?'เชื่อมต่อ MQTT Broker แล้ว':'ขาดการเชื่อมต่อ MQTT';
+    on.disabled=!ok; off.disabled=!ok;
+  };
+  if (!window.mqtt) { mqttStatus.textContent='ไม่สามารถโหลดไลบรารี MQTT.js จาก CDN'; return; }
+  const c=mqtt.connect('wss://broker.emqx.io:8084/mqtt', {clientId:'bx3_web_'+Math.random().toString(16).slice(2), reconnectPeriod:3000, connectTimeout:12000, clean:true, protocolVersion:4});
+  let lastSeen=0;
+  c.on('connect',()=>{setConnection(true);c.subscribe(statusTopic,{qos:0});msg.textContent='พร้อมส่งคำสั่งผ่านเว็บไซต์ (โปรดตรวจว่า ESP32 ต่ออินเทอร์เน็ตอยู่)';});
+  c.on('reconnect',()=>{mqttStatus.textContent='กำลังเชื่อมต่อใหม่…';});
+  c.on('offline',()=>setConnection(false));
+  c.on('close',()=>setConnection(false));
+  c.on('error',()=>{mqttStatus.textContent='เชื่อมต่อ Broker ไม่สำเร็จ (ตรวจ Wi-Fi/ไฟร์วอลล์พอร์ต 8084)';});
+  c.on('message',(topic,payload)=>{
+    if(topic!==statusTopic)return;
+    const state=payload.toString().trim().toUpperCase();
+    if(state!=='ON' && state!=='OFF')return;
+    lastSeen=Date.now(); device.classList.add('connected');
+    deviceStatus.textContent='ESP32 ตอบกลับ: '+(state==='ON'?'LED ติด':'LED ดับ');
+    led.classList.toggle('on',state==='ON'); ledText.textContent='LED: '+(state==='ON'?'ON':'OFF');
+    msg.textContent='ได้รับสถานะจริงจาก ESP32 แล้ว';
+  });
+  function send(command){if(!c.connected)return;msg.textContent='ส่งคำสั่ง '+command+' แล้ว กำลังรอ ESP32 ตอบกลับ…';c.publish(commandTopic,command,{qos:0,retain:false});}
+  on.addEventListener('click',()=>send('ON')); off.addEventListener('click',()=>send('OFF'));
+  setInterval(()=>{if(lastSeen && Date.now()-lastSeen>30000){device.classList.remove('connected');deviceStatus.textContent='ยังไม่มีสถานะอัปเดตจาก ESP32 ใน 30 วินาที';}},5000);
+})();
+</script>
+</body>
+</html>
