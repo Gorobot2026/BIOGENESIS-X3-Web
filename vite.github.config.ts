@@ -1,7 +1,4 @@
-/**
- * BIOGENESIS X3 — GitHub Pages production build.
- * Keep the original vite.config.ts unchanged for Figma Make.
- */
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
