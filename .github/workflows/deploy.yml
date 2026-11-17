@@ -1,8 +1,9 @@
-name: Deploy BIOGENESIS X3 (Vite + LED Test) to GitHub Pages
+name: BIOGENESIS X3 - Deploy Built Website
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -21,31 +22,48 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout repository
+      - name: Read project source
         uses: actions/checkout@v4
-      - name: Set up pnpm
+        with:
+          lfs: true
+
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - name: Set up Node.js
+          version: 10.34.3
+
+      - name: Use Node.js 22 on GitHub (not on students' computers)
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build React / Vite site
-        env:
-          FIGMA_PUBLIC_URL: /BIOGENESIS-X3-Web
-        run: pnpm run build
-      - name: Fallback for client-side routes
-        run: cp dist/index.html dist/404.html
+
+      - name: Build React for the correct GitHub Pages path
+        run: pnpm exec vite build --config vite.github.config.ts
+
+      - name: Confirm index.html is built, not Figma source
+        shell: bash
+        run: |
+          test -f dist/index.html
+          test -d dist/assets
+          if grep -q 'src/main.tsx' dist/index.html; then
+            echo 'ERROR: dist/index.html still points at TSX source.'
+            exit 1
+          fi
+          echo 'Built index.html and assets verified.'
+          grep -o '/BIOGENESIS-X3-Web/assets/[^" ]*' dist/index.html || true
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      - name: Upload dist folder
+
+      - name: Upload built website, not repository source
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
-      - name: Deploy
+          path: dist
+
+      - name: Publish to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
