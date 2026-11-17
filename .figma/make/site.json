@@ -1,0 +1,10 @@
+{
+  "description": "เว็บไซต์ที่ช่วยให้ผู้ใช้ค้นหาข้อมูลและเข้าถึงบริการออนไลน์ได้อย่างสะดวก รวดเร็ว และตรงกับความต้องการ",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
